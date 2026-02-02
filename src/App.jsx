@@ -102,7 +102,7 @@ const CLOTHING_RECOMMENDATIONS = {
   },
 }
 
-const MODEL_URL = new URL('models/mobilenetv2_mst_model94/model.json', import.meta.env.BASE_URL).toString()
+const MODEL_URL = `${import.meta.env.BASE_URL}models/mobilenetv2_mst_model94/model.json`
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
