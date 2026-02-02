@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as tf from '@tensorflow/tfjs'
 import * as faceDetection from '@tensorflow-models/face-detection'
-import '@mediapipe/face_detection'
 import { createClient } from '@supabase/supabase-js'
 
 const MST_COLORS = [
@@ -241,9 +240,8 @@ function App() {
     }
     const model = faceDetection.SupportedModels.MediaPipeFaceDetector
     const detector = await faceDetection.createDetector(model, {
-      runtime: 'mediapipe',
+      runtime: 'tfjs',
       modelType: 'short',
-      solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection',
     })
     faceDetectorRef.current = detector
     return detector
