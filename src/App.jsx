@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as tf from '@tensorflow/tfjs'
 import * as faceDetection from '@tensorflow-models/face-detection'
 import { createClient } from '@supabase/supabase-js'
@@ -109,7 +109,44 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const SUPABASE_BUCKET = import.meta.env.VITE_SUPABASE_BUCKET
 
 const supabaseClient = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
-const backendReady = tf.setBackend('cpu').then(() => tf.ready())
+const FACE_DETECTOR_TIMEOUT_MS = 8000
+let backendReadyPromise = null
+
+const ensureBackendReady = async () => {
+  if (!backendReadyPromise) {
+    backendReadyPromise = (async () => {
+      try {
+        await tf.setBackend('webgl')
+      } catch {
+        await tf.setBackend('cpu')
+      }
+      if (tf.getBackend() !== 'webgl') {
+        await tf.setBackend('cpu')
+      }
+      await tf.ready()
+    })()
+  }
+  try {
+    await backendReadyPromise
+    return true
+  } catch {
+    return false
+  }
+}
+
+const withTimeout = (promise, timeoutMs) =>
+  new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error('Face detector timeout')), timeoutMs)
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId)
+        resolve(value)
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId)
+        reject(error)
+      })
+  })
 
 function App() {
   const [navOpen, setNavOpen] = useState(false)
@@ -127,7 +164,7 @@ function App() {
   const faceDetectorRef = useRef(null)
 
   useEffect(() => {
-    ensureBackend()
+    ensureBackendReady()
     return () => {
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl)
@@ -190,7 +227,7 @@ function App() {
     setLoading(true)
     setErrorMessage('')
     try {
-      const backendOk = await ensureBackend()
+      const backendOk = await ensureBackendReady()
       const timestamp = Date.now()
       const { tensorInput, processedCanvas, luminance, faceDetected } = await createTensorFromFile(selectedFile)
       if (!backendOk || !tensorInput) {
@@ -239,16 +276,7 @@ function App() {
     }
   }
 
-  const ensureBackend = async () => {
-    try {
-      await backendReady
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  const normalizeInputLayerConfig = (value) => {
+  const normalizeInputLayerConfig = useCallback((value) => {
     if (!value || typeof value !== 'object') {
       return
     }
@@ -262,9 +290,9 @@ function App() {
       }
     }
     Object.values(value).forEach(normalizeInputLayerConfig)
-  }
+  }, [])
 
-  const normalizeInboundNodes = (value) => {
+  const normalizeInboundNodes = useCallback((value) => {
     if (!value || typeof value !== 'object') {
       return
     }
@@ -286,13 +314,13 @@ function App() {
       })
     }
     Object.values(value).forEach(normalizeInboundNodes)
-  }
+  }, [])
 
-  const loadModel = async () => {
+  const loadModel = useCallback(async () => {
     if (modelRef.current) {
       return modelRef.current
     }
-    await ensureBackend()
+    await ensureBackendReady()
     const handler = tf.io.browserHTTPRequest(MODEL_URL)
     const fixedHandler = {
       load: async () => {
@@ -306,21 +334,42 @@ function App() {
     }
     modelRef.current = await tf.loadLayersModel(fixedHandler)
     return modelRef.current
-  }
+  }, [normalizeInboundNodes, normalizeInputLayerConfig])
 
-  const loadFaceDetector = async () => {
+  const loadFaceDetector = useCallback(async () => {
+    if (faceDetectorRef.current === false) {
+      return null
+    }
     if (faceDetectorRef.current) {
       return faceDetectorRef.current
     }
-    await ensureBackend()
-    const model = faceDetection.SupportedModels.MediaPipeFaceDetector
-    const detector = await faceDetection.createDetector(model, {
-      runtime: 'tfjs',
-      modelType: 'short',
-    })
-    faceDetectorRef.current = detector
-    return detector
-  }
+    const backendOk = await ensureBackendReady()
+    if (!backendOk) {
+      faceDetectorRef.current = false
+      return null
+    }
+    try {
+      const model = faceDetection.SupportedModels.MediaPipeFaceDetector
+      const detectorPromise = faceDetection.createDetector(model, {
+        runtime: 'tfjs',
+        modelType: 'short',
+      })
+      const detector = await withTimeout(detectorPromise, FACE_DETECTOR_TIMEOUT_MS)
+      faceDetectorRef.current = detector
+      return detector
+    } catch {
+      faceDetectorRef.current = false
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedFile) {
+      return
+    }
+    loadModel().catch(() => {})
+    loadFaceDetector().catch(() => {})
+  }, [loadFaceDetector, loadModel, selectedFile])
 
   const loadImageFromFile = (file) =>
     new Promise((resolve, reject) => {
@@ -369,28 +418,30 @@ function App() {
     }
     try {
       const detector = await loadFaceDetector()
-      const faces = await detector.estimateFaces(sourceCanvas, { flipHorizontal: false })
-      if (faces && faces.length > 0) {
-        const box = faces[0].box ?? faces[0].boundingBox
-        if (box) {
-          const xMin = box.xMin ?? box.x ?? 0
-          const yMin = box.yMin ?? box.y ?? 0
-          const width = box.width ?? Math.max(0, (box.xMax ?? 0) - (box.xMin ?? 0))
-          const height = box.height ?? Math.max(0, (box.yMax ?? 0) - (box.yMin ?? 0))
-          const marginX = width * 0.2
-          const marginY = height * 0.2
-          const cropX = Math.max(0, xMin - marginX)
-          const cropY = Math.max(0, yMin - marginY)
-          const cropW = Math.min(sourceWidth - cropX, width + marginX * 2)
-          const cropH = Math.min(sourceHeight - cropY, height + marginY * 2)
-          if (cropW > 0 && cropH > 0) {
-            cropArea = {
-              x: cropX,
-              y: cropY,
-              width: cropW,
-              height: cropH,
+      if (detector) {
+        const faces = await detector.estimateFaces(sourceCanvas, { flipHorizontal: false })
+        if (faces && faces.length > 0) {
+          const box = faces[0].box ?? faces[0].boundingBox
+          if (box) {
+            const xMin = box.xMin ?? box.x ?? 0
+            const yMin = box.yMin ?? box.y ?? 0
+            const width = box.width ?? Math.max(0, (box.xMax ?? 0) - (box.xMin ?? 0))
+            const height = box.height ?? Math.max(0, (box.yMax ?? 0) - (box.yMin ?? 0))
+            const marginX = width * 0.2
+            const marginY = height * 0.2
+            const cropX = Math.max(0, xMin - marginX)
+            const cropY = Math.max(0, yMin - marginY)
+            const cropW = Math.min(sourceWidth - cropX, width + marginX * 2)
+            const cropH = Math.min(sourceHeight - cropY, height + marginY * 2)
+            if (cropW > 0 && cropH > 0) {
+              cropArea = {
+                x: cropX,
+                y: cropY,
+                width: cropW,
+                height: cropH,
+              }
+              faceDetected = true
             }
-            faceDetected = true
           }
         }
       }
