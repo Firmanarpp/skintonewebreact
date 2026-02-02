@@ -193,28 +193,16 @@ function App() {
       const backendOk = await ensureBackend()
       const timestamp = Date.now()
       const { tensorInput, processedCanvas, luminance, faceDetected } = await createTensorFromFile(selectedFile)
-      let predictedLabel = ''
-      let confidence = 0
-      let usedModel = false
-      if (backendOk && tensorInput) {
-        try {
-          const model = await loadModel()
-          const predictionTensor = model.predict(tensorInput)
-          const predictionData = await predictionTensor.data()
-          predictionTensor.dispose()
-          const prediction = getPrediction(predictionData)
-          predictedLabel = prediction.predictedLabel
-          confidence = prediction.confidence
-          usedModel = true
-        } catch {
-          usedModel = false
-        }
+      if (!backendOk || !tensorInput) {
+        throw new Error('Backend atau input tensor tidak siap.')
       }
-      if (!usedModel) {
-        const fallback = getFallbackPrediction(luminance)
-        predictedLabel = fallback.predictedLabel
-        confidence = fallback.confidence
-      }
+      const model = await loadModel()
+      const predictionTensor = model.predict(tensorInput)
+      const predictionData = await predictionTensor.data()
+      predictionTensor.dispose()
+      const prediction = getPrediction(predictionData)
+      const predictedLabel = prediction.predictedLabel
+      const confidence = prediction.confidence
       if (tensorInput) {
         tensorInput.dispose()
       }
@@ -234,8 +222,7 @@ function App() {
       const processedUrl = await uploadToSupabase(processedBlob, processedBase, 'image/jpeg')
       setResults({
         prediction: adjustedLabel,
-        confidence: usedModel ? confidence * 100 : null,
-        analysisMode: usedModel ? 'model' : 'fallback',
+        confidence: confidence * 100,
         mstColor: MST_COLORS[mstIndex],
         mstIndex,
         imageUrl: imageUrl || previewUrl,
@@ -244,8 +231,9 @@ function App() {
         skinToneGroup,
         recommendations,
       })
-    } catch {
-      setErrorMessage('Analisis gagal. Coba foto lain dengan pencahayaan yang lebih baik.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setErrorMessage(`Analisis gagal: ${message}`)
     } finally {
       setLoading(false)
     }
@@ -439,19 +427,6 @@ function App() {
       predictedLabel: CLASS_LABELS[maxIndex] || 'MST5',
       confidence: maxValue,
     }
-  }
-
-  const getFallbackPrediction = (luminance) => {
-    if (luminance >= 220) return { predictedLabel: 'MST1', confidence: 0.45 }
-    if (luminance >= 200) return { predictedLabel: 'MST2', confidence: 0.45 }
-    if (luminance >= 180) return { predictedLabel: 'MST3', confidence: 0.45 }
-    if (luminance >= 160) return { predictedLabel: 'MST4', confidence: 0.45 }
-    if (luminance >= 140) return { predictedLabel: 'MST5', confidence: 0.45 }
-    if (luminance >= 120) return { predictedLabel: 'MST6', confidence: 0.45 }
-    if (luminance >= 100) return { predictedLabel: 'MST7', confidence: 0.45 }
-    if (luminance >= 80) return { predictedLabel: 'MST8', confidence: 0.45 }
-    if (luminance >= 60) return { predictedLabel: 'MST9', confidence: 0.45 }
-    return { predictedLabel: 'MST10', confidence: 0.45 }
   }
 
   const adjustPredictionWithLuminance = (predictedLabel, luminance) => {
@@ -675,11 +650,7 @@ function App() {
               <div className="results-card" id="results-section">
                 <div className="card-header result-header">
                   <h3><i className="fas fa-chart-bar"></i> Analysis Results</h3>
-                  <div className="confidence-badge" id="confidence">
-                    {results.analysisMode === 'model'
-                      ? `Confidence: ${results.confidence.toFixed(2)}%`
-                      : 'Confidence: N/A (Fallback)'}
-                  </div>
+                  <div className="confidence-badge" id="confidence">Confidence: {results.confidence.toFixed(2)}%</div>
                 </div>
 
                 <div className="result-content">
