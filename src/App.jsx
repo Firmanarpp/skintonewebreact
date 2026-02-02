@@ -125,6 +125,7 @@ function App() {
   const faceDetectorRef = useRef(null)
 
   useEffect(() => {
+    ensureBackend()
     return () => {
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl)
@@ -226,16 +227,12 @@ function App() {
   }
 
   const ensureBackend = async () => {
-    if (tf.getBackend()) {
+    const currentBackend = tf.getBackend()
+    if (currentBackend === 'cpu') {
       return
     }
-    try {
-      await tf.setBackend('webgl')
-      await tf.ready()
-    } catch {
-      await tf.setBackend('cpu')
-      await tf.ready()
-    }
+    await tf.setBackend('cpu')
+    await tf.ready()
   }
 
   const loadModel = async () => {
