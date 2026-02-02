@@ -109,6 +109,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const SUPABASE_BUCKET = import.meta.env.VITE_SUPABASE_BUCKET
 
 const supabaseClient = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
+const backendReady = tf.setBackend('cpu').then(() => tf.ready())
 
 function App() {
   const [navOpen, setNavOpen] = useState(false)
@@ -186,6 +187,7 @@ function App() {
     }
     setLoading(true)
     try {
+      await ensureBackend()
       const model = await loadModel()
       const timestamp = Date.now()
       const { tensorInput, processedCanvas, luminance, faceDetected } = await createTensorFromFile(selectedFile)
@@ -227,12 +229,7 @@ function App() {
   }
 
   const ensureBackend = async () => {
-    const currentBackend = tf.getBackend()
-    if (currentBackend === 'cpu') {
-      return
-    }
-    await tf.setBackend('cpu')
-    await tf.ready()
+    await backendReady
   }
 
   const loadModel = async () => {
