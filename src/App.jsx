@@ -190,15 +190,34 @@ function App() {
     setLoading(true)
     setErrorMessage('')
     try {
-      await ensureBackend()
-      const model = await loadModel()
+      const backendOk = await ensureBackend()
       const timestamp = Date.now()
       const { tensorInput, processedCanvas, luminance, faceDetected } = await createTensorFromFile(selectedFile)
-      const predictionTensor = model.predict(tensorInput)
-      const predictionData = await predictionTensor.data()
-      predictionTensor.dispose()
-      tensorInput.dispose()
-      const { predictedLabel, confidence } = getPrediction(predictionData)
+      let predictedLabel = ''
+      let confidence = 0
+      let usedModel = false
+      if (backendOk && tensorInput) {
+        try {
+          const model = await loadModel()
+          const predictionTensor = model.predict(tensorInput)
+          const predictionData = await predictionTensor.data()
+          predictionTensor.dispose()
+          const prediction = getPrediction(predictionData)
+          predictedLabel = prediction.predictedLabel
+          confidence = prediction.confidence
+          usedModel = true
+        } catch {
+          usedModel = false
+        }
+      }
+      if (!usedModel) {
+        const fallback = getFallbackPrediction(luminance)
+        predictedLabel = fallback.predictedLabel
+        confidence = fallback.confidence
+      }
+      if (tensorInput) {
+        tensorInput.dispose()
+      }
       const adjustedLabel = adjustPredictionWithLuminance(predictedLabel, luminance)
       const mstIndex = parseInt(adjustedLabel.replace('MST', ''), 10) - 1
       const skinToneGroup = getSkinToneGroup(adjustedLabel)
@@ -224,17 +243,36 @@ function App() {
         skinToneGroup,
         recommendations,
       })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setErrorMessage(message)
-      window.alert(`An error occurred during analysis: ${message}`)
+    } catch {
+      setErrorMessage('Analisis gagal. Coba foto lain dengan pencahayaan yang lebih baik.')
     } finally {
       setLoading(false)
     }
   }
 
   const ensureBackend = async () => {
-    await backendReady
+    try {
+      await backendReady
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const normalizeInputLayerConfig = (value) => {
+    if (!value || typeof value !== 'object') {
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach(normalizeInputLayerConfig)
+      return
+    }
+    if (value.class_name === 'InputLayer' && value.config) {
+      if (value.config.batch_shape && !value.config.batch_input_shape) {
+        value.config.batch_input_shape = value.config.batch_shape
+      }
+    }
+    Object.values(value).forEach(normalizeInputLayerConfig)
   }
 
   const loadModel = async () => {
@@ -242,7 +280,17 @@ function App() {
       return modelRef.current
     }
     await ensureBackend()
-    modelRef.current = await tf.loadLayersModel(MODEL_URL)
+    const handler = tf.io.browserHTTPRequest(MODEL_URL)
+    const fixedHandler = {
+      load: async () => {
+        const artifacts = await handler.load()
+        if (artifacts?.modelTopology) {
+          normalizeInputLayerConfig(artifacts.modelTopology)
+        }
+        return artifacts
+      },
+    }
+    modelRef.current = await tf.loadLayersModel(fixedHandler)
     return modelRef.current
   }
 
@@ -349,9 +397,14 @@ function App() {
     )
     const imageData = ctx.getImageData(0, 0, size, size)
     const luminance = calculateLuminance(imageData.data)
-    const tensorInput = tf.tidy(() =>
-      tf.browser.fromPixels(canvas).toFloat().div(255).expandDims(0)
-    )
+    let tensorInput = null
+    try {
+      tensorInput = tf.tidy(() =>
+        tf.browser.fromPixels(canvas).toFloat().div(255).expandDims(0)
+      )
+    } catch {
+      tensorInput = null
+    }
     return { tensorInput, processedCanvas: canvas, luminance, faceDetected }
   }
 
@@ -379,6 +432,19 @@ function App() {
       predictedLabel: CLASS_LABELS[maxIndex] || 'MST5',
       confidence: maxValue,
     }
+  }
+
+  const getFallbackPrediction = (luminance) => {
+    if (luminance >= 220) return { predictedLabel: 'MST1', confidence: 0.45 }
+    if (luminance >= 200) return { predictedLabel: 'MST2', confidence: 0.45 }
+    if (luminance >= 180) return { predictedLabel: 'MST3', confidence: 0.45 }
+    if (luminance >= 160) return { predictedLabel: 'MST4', confidence: 0.45 }
+    if (luminance >= 140) return { predictedLabel: 'MST5', confidence: 0.45 }
+    if (luminance >= 120) return { predictedLabel: 'MST6', confidence: 0.45 }
+    if (luminance >= 100) return { predictedLabel: 'MST7', confidence: 0.45 }
+    if (luminance >= 80) return { predictedLabel: 'MST8', confidence: 0.45 }
+    if (luminance >= 60) return { predictedLabel: 'MST9', confidence: 0.45 }
+    return { predictedLabel: 'MST10', confidence: 0.45 }
   }
 
   const adjustPredictionWithLuminance = (predictedLabel, luminance) => {
