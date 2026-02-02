@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <style>
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0px); }
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .floating { animation: float 4s ease-in-out infinite; }
+    .pulsing { animation: pulse 3s ease-in-out infinite; }
+    .rotating { animation: rotate 20s linear infinite; }
+  </style>
+  
+  <!-- Background circles -->
+  <circle cx="170" cy="300" r="150" fill="#a29bfe" opacity="0.15" class="pulsing" />
+  <circle cx="430" cy="120" r="100" fill="#fd79a8" opacity="0.15" class="pulsing" />
+  
+  <!-- Color palette in the background -->
+  <g class="rotating" style="transform-origin: 300px 200px;">
+    <circle cx="300" cy="200" r="120" fill="none" stroke="#e1e1e1" stroke-width="2" />
+    <circle cx="300" cy="80" r="20" fill="#6c5ce7" />
+    <circle cx="391" cy="135" r="20" fill="#fd79a8" />
+    <circle cx="391" cy="265" r="20" fill="#00b894" />
+    <circle cx="300" cy="320" r="20" fill="#0984e3" />
+    <circle cx="209" cy="265" r="20" fill="#f1c40f" />
+    <circle cx="209" cy="135" r="20" fill="#e17055" />
+  </g>
+  
+  <!-- Phone mockup -->
+  <g class="floating">
+    <rect x="200" y="100" width="200" height="360" rx="20" fill="#ffffff" stroke="#333333" stroke-width="8" />
+    <rect x="210" y="130" width="180" height="280" rx="2" fill="#f8f9fa" />
+    <circle cx="300" cy="110" r="5" fill="#333333" />
+    <rect x="280" y="470" width="40" height="8" rx="4" fill="#333333" />
+    
+    <!-- App UI on the phone screen -->
+    <rect x="220" y="140" width="160" height="30" rx="5" fill="#6c5ce7" />
+    <text x="300" y="160" font-family="Arial" font-size="12" fill="white" text-anchor="middle">Skin Tone Analyzer</text>
+    
+    <rect x="230" y="180" width="140" height="100" rx="5" fill="#e1e1e1" />
+    <circle cx="300" cy="230" r="40" fill="#f3dbc3" stroke="#6c5ce7" stroke-width="2" />
+    <text x="300" y="290" font-family="Arial" font-size="10" fill="#333333" text-anchor="middle">Upload your photo</text>
+    
+    <rect x="230" y="290" width="140" height="40" rx="5" fill="#f8f9fa" stroke="#e1e1e1" stroke-width="1" />
+    <text x="300" y="315" font-family="Arial" font-size="10" fill="#333333" text-anchor="middle">MST Scale Result</text>
+    
+    <g>
+      <rect x="230" y="340" width="20" height="15" rx="2" fill="#f6ede4" />
+      <rect x="255" y="340" width="20" height="15" rx="2" fill="#f3e7db" />
+      <rect x="280" y="340" width="20" height="15" rx="2" fill="#f7ead0" />
+      <rect x="305" y="340" width="20" height="15" rx="2" fill="#eadaba" />
+      <rect x="330" y="340" width="20" height="15" rx="2" fill="#d7bd96" />
+    </g>
+    <g>
+      <rect x="230" y="360" width="20" height="15" rx="2" fill="#a07e56" />
+      <rect x="255" y="360" width="20" height="15" rx="2" fill="#825c43" />
+      <rect x="280" y="360" width="20" height="15" rx="2" fill="#604134" />
+      <rect x="305" y="360" width="20" height="15" rx="2" fill="#3a312a" />
+      <rect x="330" y="360" width="20" height="15" rx="2" fill="#292420" />
+    </g>
+    <rect x="290" y="340" width="20" height="15" rx="2" stroke="#6c5ce7" stroke-width="2" fill="none" />
+  </g>
+
+  <!-- Floating color swatches -->
+  <rect x="140" y="150" width="30" height="30" rx="5" fill="#fd79a8" transform="rotate(-15)" class="floating" style="animation-delay: 0.5s;" />
+  <rect x="400" y="240" width="30" height="30" rx="5" fill="#00b894" transform="rotate(10)" class="floating" style="animation-delay: 1s;" />
+  <rect x="120" y="240" width="30" height="30" rx="5" fill="#0984e3" transform="rotate(20)" class="floating" style="animation-delay: 1.5s;" />
+  <rect x="420" y="180" width="30" height="30" rx="5" fill="#f1c40f" transform="rotate(-10)" class="floating" style="animation-delay: 2s;" />
+</svg>
