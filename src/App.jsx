@@ -225,11 +225,24 @@ function App() {
     }
   }
 
+  const ensureBackend = async () => {
+    if (tf.getBackend()) {
+      return
+    }
+    try {
+      await tf.setBackend('webgl')
+      await tf.ready()
+    } catch {
+      await tf.setBackend('cpu')
+      await tf.ready()
+    }
+  }
+
   const loadModel = async () => {
     if (modelRef.current) {
       return modelRef.current
     }
-    await tf.ready()
+    await ensureBackend()
     modelRef.current = await tf.loadLayersModel(MODEL_URL)
     return modelRef.current
   }
@@ -238,6 +251,7 @@ function App() {
     if (faceDetectorRef.current) {
       return faceDetectorRef.current
     }
+    await ensureBackend()
     const model = faceDetection.SupportedModels.MediaPipeFaceDetector
     const detector = await faceDetection.createDetector(model, {
       runtime: 'tfjs',
