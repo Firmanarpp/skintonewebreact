@@ -564,6 +564,15 @@ ul {
     font-size: 1.2rem;
 }
 
+.error-message {
+    margin: 0 2rem 2rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius-md);
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+    font-size: 0.9rem;
+}
+
 .result-header {
     display: flex;
     justify-content: space-between;

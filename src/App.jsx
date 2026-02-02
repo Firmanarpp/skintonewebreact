@@ -118,6 +118,7 @@ function App() {
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState('')
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const [activeTab, setActiveTab] = useState('recommended')
   const [accordionOpen, setAccordionOpen] = useState([false, false, false, false])
   const [dragActive, setDragActive] = useState(false)
@@ -161,6 +162,7 @@ function App() {
     }
     setSelectedFile(file)
     setResults(null)
+    setErrorMessage('')
     setActiveTab('recommended')
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl)
@@ -186,6 +188,7 @@ function App() {
       return
     }
     setLoading(true)
+    setErrorMessage('')
     try {
       await ensureBackend()
       const model = await loadModel()
@@ -221,8 +224,10 @@ function App() {
         skinToneGroup,
         recommendations,
       })
-    } catch {
-      window.alert('An error occurred during analysis. Please try again.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setErrorMessage(message)
+      window.alert(`An error occurred during analysis: ${message}`)
     } finally {
       setLoading(false)
     }
@@ -255,14 +260,41 @@ function App() {
     return detector
   }
 
+  const loadImageFromFile = (file) =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const image = new Image()
+      image.onload = () => {
+        URL.revokeObjectURL(url)
+        resolve(image)
+      }
+      image.onerror = () => {
+        URL.revokeObjectURL(url)
+        reject(new Error('Failed to load image file.'))
+      }
+      image.src = url
+    })
+
   const createTensorFromFile = async (file) => {
-    const imageBitmap = await createImageBitmap(file)
+    let imageBitmap = null
+    let imageElement = null
+    try {
+      imageBitmap = await createImageBitmap(file)
+    } catch {
+      imageElement = await loadImageFromFile(file)
+    }
+    const sourceWidth = imageBitmap ? imageBitmap.width : imageElement.width
+    const sourceHeight = imageBitmap ? imageBitmap.height : imageElement.height
     const size = 224
     const sourceCanvas = document.createElement('canvas')
-    sourceCanvas.width = imageBitmap.width
-    sourceCanvas.height = imageBitmap.height
+    sourceCanvas.width = sourceWidth
+    sourceCanvas.height = sourceHeight
     const sourceCtx = sourceCanvas.getContext('2d')
-    sourceCtx.drawImage(imageBitmap, 0, 0)
+    if (imageBitmap) {
+      sourceCtx.drawImage(imageBitmap, 0, 0)
+    } else {
+      sourceCtx.drawImage(imageElement, 0, 0)
+    }
     let faceDetected = false
     let cropArea = {
       x: 0,
@@ -284,8 +316,8 @@ function App() {
           const marginY = height * 0.2
           const cropX = Math.max(0, xMin - marginX)
           const cropY = Math.max(0, yMin - marginY)
-          const cropW = Math.min(imageBitmap.width - cropX, width + marginX * 2)
-          const cropH = Math.min(imageBitmap.height - cropY, height + marginY * 2)
+          const cropW = Math.min(sourceWidth - cropX, width + marginX * 2)
+          const cropH = Math.min(sourceHeight - cropY, height + marginY * 2)
           if (cropW > 0 && cropH > 0) {
             cropArea = {
               x: cropX,
@@ -560,6 +592,9 @@ function App() {
               <button id="analyze-btn" className="analyze-btn" disabled={!selectedFile || loading} onClick={handleAnalyze}>
                 <i className="fas fa-magic"></i> Analyze Skin Tone
               </button>
+              {errorMessage && (
+                <div className="error-message">{errorMessage}</div>
+              )}
             </div>
 
             {results && (
