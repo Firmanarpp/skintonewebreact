@@ -264,6 +264,30 @@ function App() {
     Object.values(value).forEach(normalizeInputLayerConfig)
   }
 
+  const normalizeInboundNodes = (value) => {
+    if (!value || typeof value !== 'object') {
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach(normalizeInboundNodes)
+      return
+    }
+    if (Array.isArray(value.inbound_nodes)) {
+      value.inbound_nodes = value.inbound_nodes.map((node) => {
+        if (Array.isArray(node)) {
+          return node
+        }
+        const args = node?.args
+        const history = Array.isArray(args) ? args[0]?.config?.keras_history : null
+        if (Array.isArray(history)) {
+          return [[history[0], history[1] ?? 0, history[2] ?? 0, {}]]
+        }
+        return []
+      })
+    }
+    Object.values(value).forEach(normalizeInboundNodes)
+  }
+
   const loadModel = async () => {
     if (modelRef.current) {
       return modelRef.current
@@ -275,6 +299,7 @@ function App() {
         const artifacts = await handler.load()
         if (artifacts?.modelTopology) {
           normalizeInputLayerConfig(artifacts.modelTopology)
+          normalizeInboundNodes(artifacts.modelTopology)
         }
         return artifacts
       },
