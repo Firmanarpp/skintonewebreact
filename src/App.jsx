@@ -234,7 +234,8 @@ function App() {
       const processedUrl = await uploadToSupabase(processedBlob, processedBase, 'image/jpeg')
       setResults({
         prediction: adjustedLabel,
-        confidence: confidence * 100,
+        confidence: usedModel ? confidence * 100 : null,
+        analysisMode: usedModel ? 'model' : 'fallback',
         mstColor: MST_COLORS[mstIndex],
         mstIndex,
         imageUrl: imageUrl || previewUrl,
@@ -337,7 +338,10 @@ function App() {
     const sourceCanvas = document.createElement('canvas')
     sourceCanvas.width = sourceWidth
     sourceCanvas.height = sourceHeight
-    const sourceCtx = sourceCanvas.getContext('2d')
+    const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true })
+    if (!sourceCtx) {
+      return { tensorInput: null, processedCanvas: sourceCanvas, luminance: 0, faceDetected: false }
+    }
     if (imageBitmap) {
       sourceCtx.drawImage(imageBitmap, 0, 0)
     } else {
@@ -347,8 +351,8 @@ function App() {
     let cropArea = {
       x: 0,
       y: 0,
-      width: imageBitmap.width,
-      height: imageBitmap.height,
+      width: sourceWidth,
+      height: sourceHeight,
     }
     try {
       const detector = await loadFaceDetector()
@@ -383,7 +387,10 @@ function App() {
     const canvas = document.createElement('canvas')
     canvas.width = size
     canvas.height = size
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) {
+      return { tensorInput: null, processedCanvas: canvas, luminance: 0, faceDetected }
+    }
     ctx.drawImage(
       sourceCanvas,
       cropArea.x,
@@ -485,10 +492,11 @@ function App() {
       return null
     }
     const { error } = await supabaseClient.storage.from(SUPABASE_BUCKET).upload(path, file, {
-      contentType,
+      contentType: contentType || 'application/octet-stream',
       upsert: true,
     })
     if (error) {
+      setErrorMessage((prev) => prev || `Upload gagal: ${error.message}`)
       return null
     }
     const { data } = supabaseClient.storage.from(SUPABASE_BUCKET).getPublicUrl(path)
@@ -667,7 +675,11 @@ function App() {
               <div className="results-card" id="results-section">
                 <div className="card-header result-header">
                   <h3><i className="fas fa-chart-bar"></i> Analysis Results</h3>
-                  <div className="confidence-badge" id="confidence">Confidence: {results.confidence.toFixed(2)}%</div>
+                  <div className="confidence-badge" id="confidence">
+                    {results.analysisMode === 'model'
+                      ? `Confidence: ${results.confidence.toFixed(2)}%`
+                      : 'Confidence: N/A (Fallback)'}
+                  </div>
                 </div>
 
                 <div className="result-content">
