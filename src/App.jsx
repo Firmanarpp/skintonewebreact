@@ -316,6 +316,23 @@ function App() {
     Object.values(value).forEach(normalizeInboundNodes)
   }, [])
 
+  const normalizeDTypePolicy = useCallback((value) => {
+    if (!value || typeof value !== 'object') {
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach(normalizeDTypePolicy)
+      return
+    }
+    if (value.dtype && typeof value.dtype === 'object') {
+      const dtypeName = value.dtype?.config?.name
+      if (typeof dtypeName === 'string') {
+        value.dtype = dtypeName
+      }
+    }
+    Object.values(value).forEach(normalizeDTypePolicy)
+  }, [])
+
   const loadModel = useCallback(async () => {
     if (modelRef.current) {
       return modelRef.current
@@ -328,13 +345,14 @@ function App() {
         if (artifacts?.modelTopology) {
           normalizeInputLayerConfig(artifacts.modelTopology)
           normalizeInboundNodes(artifacts.modelTopology)
+          normalizeDTypePolicy(artifacts.modelTopology)
         }
         return artifacts
       },
     }
     modelRef.current = await tf.loadLayersModel(fixedHandler)
     return modelRef.current
-  }, [normalizeInboundNodes, normalizeInputLayerConfig])
+  }, [normalizeDTypePolicy, normalizeInboundNodes, normalizeInputLayerConfig])
 
   const loadFaceDetector = useCallback(async () => {
     if (faceDetectorRef.current === false) {
