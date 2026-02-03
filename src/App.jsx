@@ -381,13 +381,7 @@ function App() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!selectedFile) {
-      return
-    }
-    loadModel().catch(() => {})
-    loadFaceDetector().catch(() => {})
-  }, [loadFaceDetector, loadModel, selectedFile])
+
 
   const loadImageFromFile = (file) =>
     new Promise((resolve, reject) => {
