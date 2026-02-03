@@ -110,6 +110,7 @@ const SUPABASE_BUCKET = import.meta.env.VITE_SUPABASE_BUCKET
 
 const supabaseClient = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
 const FACE_DETECTOR_TIMEOUT_MS = 8000
+const DETECTION_MAX_SIZE = 640
 let backendReadyPromise = null
 
 const ensureBackendReady = async () => {
@@ -227,6 +228,7 @@ function App() {
     setLoading(true)
     setErrorMessage('')
     try {
+      await new Promise((resolve) => setTimeout(resolve, 0))
       const backendOk = await ensureBackendReady()
       const timestamp = Date.now()
       const { tensorInput, processedCanvas, luminance, faceDetected } = await createTensorFromFile(selectedFile)
@@ -421,6 +423,24 @@ function App() {
     } else {
       sourceCtx.drawImage(imageElement, 0, 0)
     }
+    let detectionCanvas = sourceCanvas
+    let scaleX = 1
+    let scaleY = 1
+    if (Math.max(sourceWidth, sourceHeight) > DETECTION_MAX_SIZE) {
+      const ratio = DETECTION_MAX_SIZE / Math.max(sourceWidth, sourceHeight)
+      const detectionWidth = Math.round(sourceWidth * ratio)
+      const detectionHeight = Math.round(sourceHeight * ratio)
+      const resizedCanvas = document.createElement('canvas')
+      resizedCanvas.width = detectionWidth
+      resizedCanvas.height = detectionHeight
+      const resizedCtx = resizedCanvas.getContext('2d', { willReadFrequently: true })
+      if (resizedCtx) {
+        resizedCtx.drawImage(sourceCanvas, 0, 0, detectionWidth, detectionHeight)
+        detectionCanvas = resizedCanvas
+        scaleX = sourceWidth / detectionWidth
+        scaleY = sourceHeight / detectionHeight
+      }
+    }
     let faceDetected = false
     let cropArea = {
       x: 0,
@@ -431,14 +451,18 @@ function App() {
     try {
       const detector = await loadFaceDetector()
       if (detector) {
-        const faces = await detector.estimateFaces(sourceCanvas, { flipHorizontal: false })
+        const faces = await detector.estimateFaces(detectionCanvas, { flipHorizontal: false })
         if (faces && faces.length > 0) {
           const box = faces[0].box ?? faces[0].boundingBox
           if (box) {
-            const xMin = box.xMin ?? box.x ?? 0
-            const yMin = box.yMin ?? box.y ?? 0
-            const width = box.width ?? Math.max(0, (box.xMax ?? 0) - (box.xMin ?? 0))
-            const height = box.height ?? Math.max(0, (box.yMax ?? 0) - (box.yMin ?? 0))
+            const rawXMin = box.xMin ?? box.x ?? 0
+            const rawYMin = box.yMin ?? box.y ?? 0
+            const rawWidth = box.width ?? Math.max(0, (box.xMax ?? 0) - (box.xMin ?? 0))
+            const rawHeight = box.height ?? Math.max(0, (box.yMax ?? 0) - (box.yMin ?? 0))
+            const xMin = rawXMin * scaleX
+            const yMin = rawYMin * scaleY
+            const width = rawWidth * scaleX
+            const height = rawHeight * scaleY
             const marginX = width * 0.2
             const marginY = height * 0.2
             const cropX = Math.max(0, xMin - marginX)
